@@ -1,0 +1,62 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v1.9.0
+    container_name: homepage
+    restart: unless-stopped
+
+    # Security hardening: prevents the container from gaining additional privileges
+    security_opt:
+      - no-new-privileges:true
+
+    # Homepage must be on the same user-defined network as Traefik
+    networks:
+      - lobby-network
+
+    environment:
+      # Only allow requests coming from the expected hostname.
+      # This should match the Traefik router rule below.
+      - HOMEPAGE_ALLOWED_HOSTS=${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}
+
+    volumes:
+      # Homepage configuration directory
+      - ${LOBBY_CONFIG_DIR:-./data}/homepage:/app/config
+      - ${LOBBY_LOG_DIR:-./data}/homepage:/app/config/logs
+      # Read-only Docker socket for service discovery
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    labels:
+      # ============================================================
+      # Traefik Routing
+      # ============================================================
+      # Explicitly enable Traefik for this container
+      - "traefik.enable=true"
+
+      # Route:
+      #   http://homepage.lobby.local
+      # or
+      #   http://homepage.<your-domain>.<your-tld>
+      - "traefik.http.routers.homepage.rule=Host(`${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}`)"
+      - "traefik.http.routers.homepage.entrypoints=web"
+
+      # Homepage listens internally on port 3000
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+
+      # ============================================================
+      # Homepage (Self-registration tile, optional)
+      # ============================================================
+      # Allows Homepage to show itself as a service tile
+      - "homepage.group=Infrastructure"
+      - "homepage.name=Homepage"
+      - "homepage.icon=homepage.png"
+      - "homepage.href=http://${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}"
+      - "homepage.description=Central dashboard for homelab services"
+
+networks:
+  lobby-network:
+    driver: bridge
+    # User-defined bridge network used by Traefik and all proxied services.
+    # This network is created and managed by Docker Compose.
+    # It must match the value configured in Traefik:
+    #   --providers.docker.network=${LOBBY_DOCKER_NETWORK:-lobby-network}
+    name: ${LOBBY_DOCKER_NETWORK:-lobby-network}
+
