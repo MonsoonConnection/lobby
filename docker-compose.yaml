@@ -9,6 +9,7 @@ name: lobby
 include:
   - containers/traefik/docker-compose.yaml
   - containers/homepage/docker-compose.yaml
+  - containers/portainer/docker-compose.yaml
 
 networks:
   # ----------------------------------------------------------

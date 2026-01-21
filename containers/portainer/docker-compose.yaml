@@ -1,0 +1,59 @@
+services:
+  portainer:
+    image: portainer/portainer-ce:2.33.6-alpine
+    container_name: portainer
+    restart: always
+
+    # Security hardening: prevents the container from gaining additional privileges
+    security_opt:
+      - no-new-privileges:true
+
+    # Traefik must be attached to the same user-defined network as the services it proxies
+    networks:
+      - lobby-network
+
+    # Required so Portainer can watch Docker events and discover containers dynamically
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${LOBBY_DATA_DIR}/portainer:/data
+
+    labels:
+      # ============================================================
+      # Traefik Self-Routing
+      # ============================================================
+      # Enable Traefik routing for this container itself
+      - "traefik.enable=true"
+
+      # Router that exposes the Traefik dashboard
+      # Example:
+      #   http://portainer.lobby.local
+      - "traefik.http.routers.portainer.rule=Host(`portainer.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}`)"
+      - "traefik.http.routers.portainer.entrypoints=web"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+      # ============================================================
+      # Homepage (GetHomepage) Integration
+      # ============================================================
+      # Metadata consumed by Homepage to render Portainer as a service tile
+      - "homepage.group=Infrastructure"
+      - "homepage.name=Portainer"
+      - "homepage.icon=portainer.png"
+      - "homepage.description=Docker Container Management"
+      - "homepage.href=http://portainer.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}"
+      - "homepage.widget.type=portainer"
+      - "homepage.widget.url=https://portainer:9443"
+      - "homepage.widget.env=${LOBBY_PORTAINER_ENV}"
+      - "homepage.widget.key=${LOBBY_PORTAINER_API_KEY}"
+
+networks:
+  lobby-network:
+    driver: bridge
+    # Traefik requires a *user-defined* bridge network.
+    # The default Docker "bridge" network does not support:
+    #   - Container name based service discovery
+    #   - Network-scoped aliases
+    #   - Proper Traefik routing
+    #
+    # Therefore we explicitly define one and allow it to be overridden
+    # via environment variables for portability.
+    name: ${LOBBY_DOCKER_NETWORK:-lobby-network}
