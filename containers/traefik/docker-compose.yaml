@@ -1,0 +1,101 @@
+services:
+  traefik:
+    image: traefik:v3.6.7
+    container_name: traefik
+    restart: unless-stopped
+
+    # Security hardening: prevents the container from gaining additional privileges
+    security_opt:
+      - no-new-privileges:true
+
+    # Public entrypoints exposed by Traefik
+    ports:
+      - "80:80"   # HTTP entrypoint (web)
+
+    # Traefik must be attached to the same user-defined network as the services it proxies
+    networks:
+      - lobby-network
+
+    # Required so Traefik can watch Docker events and discover containers dynamically
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    command:
+      # ============================================================
+      # Global Settings
+      # ============================================================
+      # Disable version check and anonymous telemetry for production environments
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--log.level=INFO"
+
+      # ============================================================
+      # API & Dashboard
+      # ============================================================
+      # Enable Traefik’s internal API and web dashboard
+      - "--api.dashboard=true"
+      # Exposes the dashboard without authentication (OK for internal LAN only)
+      # For public access, always protect this with auth or IP whitelisting.
+      - "--api.insecure=true"
+
+      # ============================================================
+      # EntryPoints
+      # ============================================================
+      # Define the HTTP entrypoint listening on port 80
+      - "--entrypoints.web.address=:80"
+
+      # ============================================================
+      # Docker Provider
+      # ============================================================
+      # Enable Docker provider for automatic service discovery
+      - "--providers.docker=true"
+      # Only containers explicitly labeled with `traefik.enable=true` are exposed
+      - "--providers.docker.exposedByDefault=false"
+
+      # Specify which Docker network Traefik should use to reach backend services.
+      # Must be a user-defined bridge network (not Docker's default "bridge").
+      - "--providers.docker.network=${LOBBY_DOCKER_NETWORK:-lobby-network}"
+
+      # Default hostname pattern for containers without an explicit router rule.
+      # Example result:
+      #   myservice.lobby.local
+      - "--providers.docker.defaultRule=Host(`{{ normalize .Name }}.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}`)"
+
+    labels:
+      # ============================================================
+      # Traefik Self-Routing
+      # ============================================================
+      # Enable Traefik routing for this container itself
+      - "traefik.enable=true"
+
+      # Router that exposes the Traefik dashboard
+      # Example:
+      #   http://traefik.lobby.local
+      - "traefik.http.routers.dash.rule=Host(`traefik.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}`)"
+      - "traefik.http.routers.dash.entrypoints=web"
+      # Use Traefik’s built-in API service
+      - "traefik.http.routers.dash.service=api@internal"
+
+      # ============================================================
+      # Homepage (GetHomepage) Integration
+      # ============================================================
+      # Metadata consumed by Homepage to render Traefik as a service tile
+      - "homepage.group=Infrastructure"
+      - "homepage.name=Traefik"
+      - "homepage.icon=traefik-proxy.png"
+      - "homepage.href=http://traefik.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}"
+      - "homepage.description=Traefik Reverse Proxy and Edge Router"
+
+networks:
+  lobby-network:
+    driver: bridge
+    # Traefik requires a *user-defined* bridge network.
+    # The default Docker "bridge" network does not support:
+    #   - Container name based service discovery
+    #   - Network-scoped aliases
+    #   - Proper Traefik routing
+    #
+    # Therefore we explicitly define one and allow it to be overridden
+    # via environment variables for portability.
+    name: ${LOBBY_DOCKER_NETWORK:-lobby-network}
+

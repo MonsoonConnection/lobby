@@ -1,0 +1,27 @@
+# ============================================================
+# PROJECT: The Lobby
+# DESCRIPTION: Unified Gateway & Application Delivery Platform
+# ============================================================
+name: lobby
+
+# Use 'include' to pull in modular service definitions.
+# This keeps the root file clean and allows for an easy expansion.
+include:
+  - containers/traefik/docker-compose.yaml
+  - containers/homepage/docker-compose.yaml
+
+networks:
+  # ----------------------------------------------------------
+  # SHARED INFRASTRUCTURE NETWORK
+  # ----------------------------------------------------------
+  lobby-network:
+    driver: bridge
+
+    # Lobby requires a *user-defined* bridge network.
+    # The default Docker "bridge" network does not support:
+    #   - Container-to-container DNS (service discovery)
+    #   - Proper Traefik back-end routing
+    #
+    # We define it here at the root level so all included services
+    # automatically join the same communication plane.
+    name: ${LOBBY_DOCKER_NETWORK:-lobby-network}
