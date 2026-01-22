@@ -10,6 +10,7 @@ include:
   - containers/traefik/docker-compose.yaml
   - containers/homepage/docker-compose.yaml
   - containers/portainer/docker-compose.yaml
+  - containers/dockhand/docker-compose.yaml
 
 networks:
   # ----------------------------------------------------------

@@ -1,0 +1,54 @@
+services:
+  dockhand:
+    image: fnsys/dockhand:v1.0.11-baseline
+    container_name: dockhand
+    restart: unless-stopped
+
+    # Security hardening: prevents the container from gaining additional privileges
+    security_opt:
+      - no-new-privileges:true
+
+    # Traefik must be attached to the same user-defined network as the services it proxies
+    networks:
+      - lobby-network
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${LOBBY_DATA_DIR}/dockhand:/app/data
+
+    labels:
+      # ============================================================
+      # Traefik Self-Routing
+      # ============================================================
+      # Enable Traefik routing for this container itself
+      - "traefik.enable=true"
+
+      # Router that exposes the Traefik dashboard
+      # Example:
+      #   http://traefik.lobby.local
+      - "traefik.http.routers.dockhand.rule=Host(`dockhand.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}`)"
+      - "traefik.http.routers.dockhand.entrypoints=web"
+      - "traefik.http.services.dockhand.loadbalancer.server.port=3000"
+
+      # ============================================================
+      # Homepage (GetHomepage) Integration
+      # ============================================================
+      # Metadata consumed by Homepage to render Dockhand as a service tile
+      - "homepage.group=Infrastructure"
+      - "homepage.name=Dockhand"
+      - "homepage.icon=dockhand.png"
+      - "homepage.description=Lightweight Docker Management"
+      - "homepage.href=http://dockhand.${LOBBY_TRAEFIK_DOMAIN:-lobby}.${LOBBY_TRAEFIK_TLD:-local}"
+
+networks:
+  lobby-network:
+    driver: bridge
+    # Traefik requires a *user-defined* bridge network.
+    # The default Docker "bridge" network does not support:
+    #   - Container name based service discovery
+    #   - Network-scoped aliases
+    #   - Proper Traefik routing
+    #
+    # Therefore we explicitly define one and allow it to be overridden
+    # via environment variables for portability.
+    name: ${LOBBY_DOCKER_NETWORK:-lobby-network}
