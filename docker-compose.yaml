@@ -11,6 +11,7 @@ include:
   - containers/homepage/docker-compose.yaml
   - containers/portainer/docker-compose.yaml
   - containers/dockhand/docker-compose.yaml
+  - containers/bytebase/docker-compose.yaml
 
 networks:
   # ----------------------------------------------------------
